@@ -1,0 +1,8 @@
+__pycache__/
+.venv/
+.env
+*.pyc
+/.ruff_cache
+implementation_plan.md
+.vscode/
+
