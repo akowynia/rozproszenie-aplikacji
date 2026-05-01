@@ -1,46 +1,42 @@
-# URL Shortener — projekt na zajęcia z Systemów Rozproszonych
+# URL Shortener - Rozproszony
 
-Prosty serwis skracający adresy URL, przygotowany jako zadanie kursowe na przedmiot "Systemy Rozproszone".
+Aplikacja do skracania URL podzielona na dwa niezależne serwisy z bazą danych PostgreSQL.
 
-Cel projektu
-- Demonstracja podstawowych mechanizmów tworzenia prostego serwisu sieciowego.
-- Omówienie aspektów przechowywania skróconych linków, obsługi żądań i zadania okresowego (czyszczenia danych).
+## Architektura
+- **Write Service** (port 8001): Tworzenie i usuwanie skrótów.
+- **Read Service** (port 8000): Przekierowania i informacje o kodach.
+- **PostgreSQL**: Współdzielona baza danych.
 
-Zawartość repozytorium
-- `app/` — kod aplikacji (FastAPI)
+## Uruchomienie (Docker)
 
-Wymagania
-- Python 3.10+ (zalecane)
-
-Uruchomienie lokalne (zalecany, prosty sposób)
-1. Utwórz i aktywuj środowisko wirtualne:
+To najszybsza metoda uruchomienia całego środowiska:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+docker-compose up --build
 ```
 
-2. Zainstaluj zależności:
+Po uruchomieniu:
+- Dokumentacja serwisu zapisu: `http://localhost:8001/docs`
+- Dokumentacja serwisu odczytu: `http://localhost:8000/docs`
 
+## Uruchomienie Lokalne (bez Dockera)
+
+1. Wymagane zainstalowanie zależności:
 ```bash
-pip install -r requirements.txt
+pip install fastapi uvicorn pydantic pydantic-settings sqlalchemy asyncpg
 ```
 
-Jeżeli plik `requirements.txt` nie istnieje, zainstaluj minimalne pakiety:
-
+2. Konfiguracja bazy danych w `.env`:
 ```bash
-pip install fastapi uvicorn pydantic httpx
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/db
 ```
 
-3. Uruchom aplikację:
-
+3. Uruchomienie serwisu zapisu:
 ```bash
-uvicorn app.main:app --reload
+uvicorn main_write:app --port 8001 --reload
 ```
 
-4. Interfejs API i dokumentacja dostępne są pod:
-
+4. Uruchomienie serwisu odczytu:
+```bash
+uvicorn main_read:app --port 8000 --reload
 ```
-http://localhost:8000/docs
-```
-

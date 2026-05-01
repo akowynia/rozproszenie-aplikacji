@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  read-service:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:pass@db/db
+      BASE_URL: http://localhost:8000
+    depends_on:
+      - db
+    command: uvicorn main_read:app --host 0.0.0.0 --port 8000
+
+  write-service:
+    build: .
+    restart: always
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:pass@db/db
+      BASE_URL: http://localhost:8000
+    depends_on:
+      - db
+    command: uvicorn main_write:app --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_data:

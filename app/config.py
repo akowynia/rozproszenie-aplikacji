@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     max_ttl_seconds: int = 2592000
     short_code_length: int = 6
     cleanup_interval_seconds: int = 300
+    database_url: str = "postgresql+asyncpg://user:pass@localhost/db"
 
 
 settings = Settings()
