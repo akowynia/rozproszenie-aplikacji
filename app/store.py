@@ -1,9 +1,8 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import select, delete
-from sqlalchemy.ext.asyncio import AsyncSession
-from .database import UrlModel
+from cassandra.cluster import Session
 
 @dataclass
 class UrlEntry:
@@ -30,43 +29,62 @@ class InMemoryStore:
     def exists(self, code: str) -> bool:
         return self.get(code) is not None
 
-class SqlAlchemyStore:
-    def __init__(self, session: AsyncSession):
+class CassandraStore:
+    def __init__(self, session: Session):
         self.session = session
 
     async def save(self, code: str, entry: UrlEntry) -> None:
-        model = UrlModel(
-            code=code,
-            original_url=entry.original_url,
-            created_at=entry.created_at,
-            expires_at=entry.expires_at
+        query = (
+            "INSERT INTO urls (code, original_url, created_at, expires_at) "
+            "VALUES (%s, %s, %s, %s)"
         )
-        self.session.add(model)
-        await self.session.commit()
+        
+        ttl = None
+        if entry.expires_at:
+            delta = entry.expires_at - datetime.now(timezone.utc)
+            ttl = max(1, int(delta.total_seconds()))
+
+        if ttl is not None:
+            query_ttl = f"{query} USING TTL %s"
+            await asyncio.to_thread(
+                self.session.execute,
+                query_ttl,
+                (code, entry.original_url, entry.created_at, entry.expires_at, ttl)
+            )
+        else:
+            await asyncio.to_thread(
+                self.session.execute,
+                query,
+                (code, entry.original_url, entry.created_at, entry.expires_at)
+            )
 
     async def get(self, code: str) -> Optional[UrlEntry]:
-        result = await self.session.execute(select(UrlModel).where(UrlModel.code == code))
-        model = result.scalar_one_or_none()
-        
-        if model is None:
+        query = "SELECT original_url, created_at, expires_at FROM urls WHERE code = %s"
+        result = await asyncio.to_thread(self.session.execute, query, (code,))
+        row = result.one()
+        if row is None:
             return None
-            
-        if model.expires_at and datetime.now(timezone.utc) > model.expires_at.replace(tzinfo=timezone.utc):
-            await self.session.delete(model)
-            await self.session.commit()
-            return None
-            
+
+        expires_at = row.expires_at
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires_at:
+                await self.delete(code)
+                return None
+
         return UrlEntry(
-            original_url=model.original_url,
-            created_at=model.created_at,
-            expires_at=model.expires_at
+            original_url=row.original_url,
+            created_at=row.created_at,
+            expires_at=row.expires_at
         )
 
     async def delete(self, code: str) -> bool:
-        result = await self.session.execute(select(UrlModel).where(UrlModel.code == code))
-        model = result.scalar_one_or_none()
-        if model:
-            await self.session.delete(model)
-            await self.session.commit()
-            return True
-        return False
+        exists_query = "SELECT code FROM urls WHERE code = %s"
+        result = await asyncio.to_thread(self.session.execute, exists_query, (code,))
+        if not result.one():
+            return False
+
+        delete_query = "DELETE FROM urls WHERE code = %s"
+        await asyncio.to_thread(self.session.execute, delete_query, (code,))
+        return True

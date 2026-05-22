@@ -1,14 +1,34 @@
 services:
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: db
+  cassandra-seed:
+    image: cassandra:4.1
+    container_name: cassandra-seed
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ShortenerCluster
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  cassandra-node:
+    image: cassandra:4.1
+    container_name: cassandra-node
+    environment:
+      - CASSANDRA_CLUSTER_NAME=ShortenerCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
+    depends_on:
+      - cassandra-seed
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
 
   read-service:
     build: .
@@ -16,10 +36,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://user:pass@db/db
-      BASE_URL: http://localhost:8000
+      - CASSANDRA_HOSTS=cassandra-seed,cassandra-node
+      - CASSANDRA_KEYSPACE=url_shortener
+      - BASE_URL=http://localhost:8000
     depends_on:
-      - db
+      - cassandra-seed
     command: uvicorn main_read:app --host 0.0.0.0 --port 8000
 
   write-service:
@@ -28,11 +49,10 @@ services:
     ports:
       - "8001:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://user:pass@db/db
-      BASE_URL: http://localhost:8000
+      - CASSANDRA_HOSTS=cassandra-seed,cassandra-node
+      - CASSANDRA_KEYSPACE=url_shortener
+      - BASE_URL=http://localhost:8000
     depends_on:
-      - db
+      - cassandra-seed
     command: uvicorn main_write:app --host 0.0.0.0 --port 8000
 
-volumes:
-  postgres_data:

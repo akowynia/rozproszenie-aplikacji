@@ -1,14 +1,14 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from . import shortener
-from .store import UrlEntry, SqlAlchemyStore
+from .store import UrlEntry, CassandraStore
 from .config import settings
 
 class NotFoundError(Exception):
     pass
 
 class ShortenerService:
-    def __init__(self, store: SqlAlchemyStore):
+    def __init__(self, store: CassandraStore):
         self.store = store
 
     async def shorten(self, long_url: str, ttl_seconds: Optional[int] = None) -> tuple[str, UrlEntry]:
