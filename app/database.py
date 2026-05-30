@@ -56,9 +56,20 @@ def init_db():
         "  code text PRIMARY KEY,"
         "  original_url text,"
         "  created_at timestamp,"
-        "  expires_at timestamp"
+        "  expires_at timestamp,"
+        "  last_used_at timestamp"
         ");"
     )
+    try:
+        res = session.execute(
+            "SELECT column_name FROM system_schema.columns "
+            "WHERE keyspace_name = %s AND table_name = 'urls' AND column_name = 'last_used_at'",
+            (settings.cassandra_keyspace,)
+        )
+        if not res.one():
+            session.execute("ALTER TABLE urls ADD last_used_at timestamp;")
+    except Exception:
+        pass
     logger.info("Cassandra database successfully initialized.")
 
 def shutdown_db():

@@ -9,6 +9,7 @@ class UrlEntry:
     original_url: str
     created_at: datetime
     expires_at: Optional[datetime]
+    last_used_at: Optional[datetime] = None
 
 class InMemoryStore:
     def __init__(self):
@@ -34,9 +35,10 @@ class CassandraStore:
         self.session = session
 
     async def save(self, code: str, entry: UrlEntry) -> None:
+        last_used = entry.last_used_at or entry.created_at
         query = (
-            "INSERT INTO urls (code, original_url, created_at, expires_at) "
-            "VALUES (%s, %s, %s, %s)"
+            "INSERT INTO urls (code, original_url, created_at, expires_at, last_used_at) "
+            "VALUES (%s, %s, %s, %s, %s)"
         )
         
         ttl = None
@@ -49,17 +51,17 @@ class CassandraStore:
             await asyncio.to_thread(
                 self.session.execute,
                 query_ttl,
-                (code, entry.original_url, entry.created_at, entry.expires_at, ttl)
+                (code, entry.original_url, entry.created_at, entry.expires_at, last_used, ttl)
             )
         else:
             await asyncio.to_thread(
                 self.session.execute,
                 query,
-                (code, entry.original_url, entry.created_at, entry.expires_at)
+                (code, entry.original_url, entry.created_at, entry.expires_at, last_used)
             )
 
     async def get(self, code: str) -> Optional[UrlEntry]:
-        query = "SELECT original_url, created_at, expires_at FROM urls WHERE code = %s"
+        query = "SELECT original_url, created_at, expires_at, last_used_at FROM urls WHERE code = %s"
         result = await asyncio.to_thread(self.session.execute, query, (code,))
         row = result.one()
         if row is None:
@@ -73,11 +75,24 @@ class CassandraStore:
                 await self.delete(code)
                 return None
 
+        created_at = row.created_at
+        if created_at and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
+        last_used_at = row.last_used_at
+        if last_used_at and last_used_at.tzinfo is None:
+            last_used_at = last_used_at.replace(tzinfo=timezone.utc)
+
         return UrlEntry(
             original_url=row.original_url,
-            created_at=row.created_at,
-            expires_at=row.expires_at
+            created_at=created_at,
+            expires_at=expires_at,
+            last_used_at=last_used_at
         )
+
+    async def update_last_used(self, code: str, timestamp: datetime) -> None:
+        query = "UPDATE urls SET last_used_at = %s WHERE code = %s"
+        await asyncio.to_thread(self.session.execute, query, (timestamp, code))
 
     async def delete(self, code: str) -> bool:
         exists_query = "SELECT code FROM urls WHERE code = %s"

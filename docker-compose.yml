@@ -56,3 +56,16 @@ services:
       - cassandra-seed
     command: uvicorn main_write:app --host 0.0.0.0 --port 8000
 
+  cleanup-service:
+    build: .
+    restart: always
+    environment:
+      - CASSANDRA_HOSTS=cassandra-seed,cassandra-node
+      - CASSANDRA_KEYSPACE=url_shortener
+      - CLEANUP_STRATEGY=created_at
+      - CLEANUP_TTL_SECONDS=15
+      - CLEANUP_INTERVAL_SECONDS=10
+    depends_on:
+      - cassandra-seed
+    command: python main_cleanup.py
+

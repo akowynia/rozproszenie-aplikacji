@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from . import shortener
 from .store import UrlEntry, CassandraStore
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 class NotFoundError(Exception):
     pass
@@ -39,6 +42,10 @@ class ShortenerService:
         entry = await self.store.get(code)
         if entry is None:
             raise NotFoundError()
+        now = datetime.now(timezone.utc)
+        logger.info(f"Short code {code} accessed. Updating last_used_at to {now}")
+        if hasattr(self.store, "update_last_used"):
+            await self.store.update_last_used(code, now)
         return entry.original_url
 
     async def info(self, code: str) -> UrlEntry:
