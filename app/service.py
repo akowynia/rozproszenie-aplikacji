@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from . import shortener
 from .store import UrlEntry, CassandraStore
+from .messaging import alert_producer
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -10,12 +11,27 @@ logger = logging.getLogger(__name__)
 class NotFoundError(Exception):
     pass
 
+class ForbiddenUrlError(Exception):
+    pass
+
 class ShortenerService:
     def __init__(self, store: CassandraStore):
         self.store = store
 
     async def shorten(self, long_url: str, ttl_seconds: Optional[int] = None) -> tuple[str, UrlEntry]:
+        # Check for forbidden words
+        url_lower = long_url.lower()
+        if settings.forbidden_words:
+            words = [w.strip() for w in settings.forbidden_words.split(",") if w.strip()]
+            for word in words:
+                if word.lower() in url_lower:
+                    logger.warning(f"Forbidden word '{word}' detected in URL '{long_url}'")
+                    await alert_producer.send_alert(long_url, word)
+                    if settings.block_forbidden_urls:
+                        raise ForbiddenUrlError(f"URL contains forbidden word: {word}")
+
         ttl = settings.default_ttl_seconds if ttl_seconds is None else ttl_seconds
+
         if ttl < 0:
             ttl = None
         if ttl is not None:

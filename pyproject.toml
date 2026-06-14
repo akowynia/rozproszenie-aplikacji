@@ -12,7 +12,8 @@ dependencies = [
   "pydantic-settings>=0.2",
   "httpx>=0.24",
   "pytest>=7.0",
-  "cassandra-driver>=3.28"
+  "cassandra-driver>=3.28",
+  "aiokafka>=0.8.0"
 ]
 
 [tool.ruff]

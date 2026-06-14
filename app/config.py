@@ -16,5 +16,11 @@ class Settings(BaseSettings):
     cassandra_port: int = 9042
     cassandra_keyspace: str = "url_shortener"
 
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_topic: str = "forbidden-urls-alerts"
+    forbidden_words: str = "spam,phishing,malware,xxx,porn,gamble,scam,kurw,chuj,pierdol,jeb,cip,pizd"
+    block_forbidden_urls: bool = False
+
+
 
 settings = Settings()

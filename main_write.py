@@ -1,19 +1,23 @@
 from fastapi import FastAPI, HTTPException
 from app.database import init_db, shutdown_db, get_session
 from app.store import CassandraStore
-from app.service import ShortenerService
+from app.service import ShortenerService, ForbiddenUrlError
 from app.models import ShortenRequest, ShortenResponse
 from app.config import settings
+
+from app.messaging import alert_producer
 
 app = FastAPI(title="URL Shortener - Write Service")
 
 @app.on_event("startup")
-def startup():
+async def startup():
     init_db()
+    await alert_producer.start()
 
 @app.on_event("shutdown")
-def shutdown():
+async def shutdown():
     shutdown_db()
+    await alert_producer.stop()
 
 @app.post("/api/shorten", response_model=ShortenResponse, status_code=201)
 async def shorten(req: ShortenRequest):
@@ -28,8 +32,11 @@ async def shorten(req: ShortenRequest):
             original_url=str(entry.original_url),
             expires_at=entry.expires_at,
         )
+    except ForbiddenUrlError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/api/shorten/{short_code}", status_code=204)
 async def delete(short_code: str):

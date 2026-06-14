@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from datetime import datetime, timezone
 from .models import ShortenRequest, ShortenResponse, InfoResponse
-from .service import ShortenerService, NotFoundError
+from .service import ShortenerService, NotFoundError, ForbiddenUrlError
 from .config import settings
 
 def create_write_router(service: ShortenerService):
@@ -19,8 +19,11 @@ def create_write_router(service: ShortenerService):
                 original_url=str(entry.original_url),
                 expires_at=entry.expires_at,
             )
+        except ForbiddenUrlError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
 
     @router.delete("/api/shorten/{short_code}", status_code=204)
     async def delete(short_code: str):

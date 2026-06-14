@@ -41,6 +41,7 @@ services:
       - BASE_URL=http://localhost:8000
     depends_on:
       - cassandra-seed
+      - cassandra-node
     command: uvicorn main_read:app --host 0.0.0.0 --port 8000
 
   write-service:
@@ -52,9 +53,16 @@ services:
       - CASSANDRA_HOSTS=cassandra-seed,cassandra-node
       - CASSANDRA_KEYSPACE=url_shortener
       - BASE_URL=http://localhost:8000
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC=forbidden-urls-alerts
+      - FORBIDDEN_WORDS=spam,phishing,malware,xxx,porn,gamble,scam,kurw,chuj,pierdol,jeb,cip,pizd
+      - BLOCK_FORBIDDEN_URLS=false
     depends_on:
       - cassandra-seed
+      - cassandra-node
+      - kafka
     command: uvicorn main_write:app --host 0.0.0.0 --port 8000
+
 
   cleanup-service:
     build: .
@@ -68,4 +76,26 @@ services:
     depends_on:
       - cassandra-seed
     command: python main_cleanup.py
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LOG_DIRS=/tmp/kraft-combined-logs
+      - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
+
 
